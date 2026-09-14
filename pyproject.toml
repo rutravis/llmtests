@@ -1,0 +1,17 @@
+[project]
+name = "llmtests"
+version = "0.1.0"
+description = "Battery of tests for evaluating agentic coding capabilities of LLM models"
+requires-python = ">=3.12"
+dependencies = [
+    "openai>=1.0",
+    "pytest>=8.0",
+]
+
+[project.scripts]
+run-tests = "llmtests:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+addopts = "-v --tb=short"
