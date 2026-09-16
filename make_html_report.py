@@ -222,8 +222,7 @@ def generate_html(report: dict) -> str:
 
     # suite cards (clickable filters)
     parts.append('<div id="suites" class="cards">')
-    all_sel = ' class="card sel"' if True else ""
-    parts.append(f'<div{all_sel} data-suite="all"><div class="sname">All suites</div>'
+    parts.append('<div class="card sel" data-suite="all"><div class="sname">All suites</div>'
                  f'<div class="snum">{overall.get("total", 0)} tests</div></div>')
     for key, s in suites.items():
         spct = (s["passed"] / s["total"]) if s.get("total") else 0
@@ -246,7 +245,7 @@ def generate_html(report: dict) -> str:
     for key, s in suites.items():
         parts.extend(_test_html(key, t) for t in s.get("tests", []))
 
-    parts.append(f'<div class="foot">llmtests evaluation battery · generated {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")}</div>')
+    parts.append(f'<div class="foot">llmtests evaluation battery · tested {date_str}</div>')
     parts.append(f'</div><script>{_JS}</script></body></html>')
     return "".join(parts)
 
@@ -261,8 +260,8 @@ def newest_report() -> Path:
 def write_html(report_path: Path, out_path: Path | None = None) -> Path:
     report = json.loads(report_path.read_text())
     if out_path is None:
-        model = (report.get("model", "model").replace("/", "_"))
-        out_path = RESULTS_DIR / f"{model}-{report_path.stem.replace('report-', '')}.html"
+        # Sanitize model name to prevent path traversal in generated filenames
+        model = "".join(c for c in report.get("model", "model") if c.isalnum() or c in ".-_")
     out_path.write_text(generate_html(report))
     return out_path
 

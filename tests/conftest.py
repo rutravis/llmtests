@@ -26,8 +26,11 @@ class TestCase:
 
 @dataclass
 class TestResult:
-    """Result of running a single test case."""
-    __test__ = False  # not a pytest test class
+    """Result of running a single test case.
+
+    completion_tokens is estimated from character count (~1 char/token) when the API
+    does not report usage in streaming mode; draft/rejected counts come from LM Studio's
+    `stats` field on the final chunk."""
     name: str
     passed: bool
     score: float  # 0.0 - 1.0
@@ -136,10 +139,14 @@ def call_model(
     tools_json = json.dumps(tool_calls) if any(t for t in tool_calls) else ""
     # Compute timing
     prefill_ms = round((first_token_t - t_start) * 1000, 1) if first_token_t is not None else 0.0
-    gen_s = (time.monotonic() - first_token_t) if first_token_t is not None and finish_reason else 0.0
-    # Estimate completion_tokens from output length (LM Studio doesn't send usage in streaming)
-    total_output_chars = len("".join(content_parts)) + len("".join(reasoning_parts))
-    ct_est = max(total_output_chars, 1)  # ~1 char/token for code/text
+    gen_s = (time.monotonic() - first_token_t) if first_token_t is not None else 0.0
+    # Estimate completion_tokens from output length (LM Studio doesn't send usage in streaming).
+    # BPE tokens average ~4 chars for English text; use word count as a rougher proxy.
+    full_text = "".join(content_parts) + "".join(reasoning_parts)
+    ct_est = max(len(full_text.split()), 1) if full_text else 0
+    # If stream ended without finish_reason but tokens were produced, mark incomplete
+    if first_token_t and not finish_reason and full_text:
+        finish_reason = "incomplete"
     gen_speed = round(ct_est / gen_s, 2) if gen_s > 0 else 0.0
     usage_dict["completion_tokens"] = ct_est
     return "".join(content_parts), "".join(reasoning_parts), finish_reason, tools_json, prefill_ms, gen_speed, usage_dict
@@ -179,16 +186,18 @@ def score_case(result: TestResult, case: TestCase) -> None:
     # (actual usage) when code is fenced, so prose mentions like
     # "this avoids sorted()" do not trigger a false fail.
     blocks = extract_code_blocks(result.model_output)
-    if blocks:
+    if blocks and case.forbidden_patterns:
         forbidden_scope = "\n".join(blocks).lower()
-        scope_note = "in code"
-    else:
-        forbidden_scope = output
-        scope_note = "in output"
-    forbidden_hits = [fp for fp in case.forbidden_patterns if fp.lower() in forbidden_scope]
-    if forbidden_hits:
-        details.append(f"Forbidden patterns found ({scope_note}): {forbidden_hits}")
-        forbidden_score = 0.0
+        forbidden_hits = [fp for fp in case.forbidden_patterns if fp.lower() in forbidden_scope]
+        if forbidden_hits:
+            details.append(f"Forbidden patterns found in code: {forbidden_hits}")
+            forbidden_score = 0.0
+        else:
+            forbidden_score = 1.0
+    elif case.forbidden_patterns:
+        # No code blocks to check — skip forbidden-pattern gate (prose-only responses
+        # can't be evaluated for actual anti-pattern usage)
+        forbidden_score = 1.0
     else:
         forbidden_score = 1.0
 

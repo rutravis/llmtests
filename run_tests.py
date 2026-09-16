@@ -58,13 +58,13 @@ def pick_model(base_url: str, env_model: str | None) -> tuple[str, list[str]]:
     if env_model and env_model not in models:
         models.insert(0, env_model)
 
-    print(f"\nAvailable models on {base_url}:")
+    print(f"\nAvailable models on {base_url} (default: {models[0]}):")
     for i, m in enumerate(models, 1):
-        marker = " (env)" if m == env_model else ""
+        marker = " ← default" if i == 1 else (" (env)" if m == env_model else "")
         print(f"  {i}. {m}{marker}")
 
     while True:
-        choice = input(f"\nSelect model [1-{len(models)}] (or type name to pick by name): ").strip()
+        choice = input(f"\nSelect model [1-{len(models)}], type name to search (Enter=default): ").strip()
         if not choice:
             chosen = models[0]
         elif choice.isdigit():
@@ -76,7 +76,7 @@ def pick_model(base_url: str, env_model: str | None) -> tuple[str, list[str]]:
                 continue
         else:
             # Try matching by name (prefix match)
-            matches = [m for m in models if choice.lower() in m.lower()]
+            matches = [m for m in models if m.lower().startswith(choice.lower())]
             if len(matches) == 1:
                 chosen = matches[0]
             elif len(matches) > 1:
@@ -93,10 +93,10 @@ def pick_suites() -> list[str]:
     keys = list(SUITE_MAP.keys())
     print(f"\nAvailable test suites:")
     for i, k in enumerate(keys, 1):
-        label, _ = SUITE_MAP[k]
-        n_tests = len(getattr(run_codegen.__module__, '__testcases__', [])) if False else "?"
-        print(f"  {i}. {k} — {label}")
-    print(f"  A. All suites")
+        label, runner_fn = SUITE_MAP[k]
+        mod = sys.modules.get(runner_fn.__module__, None)
+        n_tests = len(getattr(mod, "TEST_CASES", [])) if mod else "?"
+        print(f"  {i}. {k} — {label} ({n_tests} tests)")
 
     while True:
         choice = input(f"\nSelect suite(s) [1-{len(keys)}, A for all, or comma-separated e.g. '1,3,7']: ").strip()
@@ -127,9 +127,14 @@ def pick_suites() -> list[str]:
                 break
         if not valid:
             continue
-        if not selected:
-            continue
-        return selected
+        # Deduplicate while preserving order
+        seen: set[str] = set()
+        unique: list[str] = []
+        for s in selected:
+            if s not in seen:
+                seen.add(s)
+                unique.append(s)
+        return unique
 
 
 def main():
@@ -187,7 +192,7 @@ def main():
             "moe_experts": int(os.environ.get("LLM_SESSION_EXPERTS", "0") or "0"),
             "speculative_decoding": bool(
                 os.environ.get("LLM_SESSION_SPEC_DEC", "").lower() in ("true", "1", "yes")
-            ) or "mtp" in model_name.lower(),
+            ) if os.environ.get("LLM_SESSION_SPEC_DEC") else "mtp" in model_name.lower(),
             "draft_tokens_per_step": int(os.environ.get("LLM_SESSION_DRAFT_TOKENS", "0") or "0"),
             "cache_quantization": os.environ.get("LLM_SESSION_CACHE_QUANT", ""),
             "system_fingerprint": mf,
@@ -272,6 +277,9 @@ def main():
             print(f"  [{status}] {r.name} (score={r.score:.2%})")
             for d in r.details[:3]:  # top 3 details per test
                 print(f"       {d}")
+        # Suite-level verdict (passes when ≥60% of tests pass)
+        suite_pass = passed >= total * 0.6 if total else False
+        print(f"  [{('PASS' if suite_pass else 'FAIL')} — SUITE]")
 
     # Overall summary
     overall_pct = grand_passed / grand_total if grand_total else 0

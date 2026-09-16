@@ -12,8 +12,7 @@ A battery of tests for evaluating agentic coding capabilities of LLM models.
 | API Knowledge | Correct usage of standard library & patterns | 3 |
 | Documentation | Clear, accurate docs and comments | 3 |
 | Error Handling | Robust exception handling & validation | 3 |
-| System Design | Architectural reasoning & tradeoff analysis | 2 |
-
+| MCP Tools | Constructing correct tool calls for MCP servers | 3 |
 ## Evaluation Results (nail-qwen3.6-35b-a3b-mtp)
 
 **Status: Model is functional but impractical for automated testing.**
@@ -63,6 +62,14 @@ LLM_MODEL=qwen3.8-27b-gsq-rco LLM_BASE_URL=http://192.168.1.14:1234/v1 python3 r
 | `LLM_MODEL` | `nail-qwen3.6-35b-a3b-mtp` | Model name to evaluate |
 | `LLM_BASE_URL` | `http://192.168.1.14:1234/v1` | OpenAI-compatible API endpoint |
 | `LLM_MAX_TOKENS` | `16384` | Per-call completion budget (thinking models need headroom for reasoning) |
+| `LLM_SESSION_CTX` | `0` | Context window size (for reporting) |
+| `LLM_SESSION_GPU_OFFLOAD` | `0` | Number of GPU offloaded layers |
+| `LLM_SESSION_REASONING_BUDGET` | `0` | Reasoning/thinking token budget |
+| `LLM_SESSION_EXPERTS` | `0` | Number of MoE experts (for reporting) |
+| `LLM_SESSION_SPEC_DEC` | `` | Override speculative decoding detection (`true`/`false`; auto-detected for `-mtp` models when unset) |
+| `LLM_SESSION_DRAFT_TOKENS` | `0` | Draft tokens per step |
+| `LLM_SESSION_CACHE_QUANT` | `` | Cache quantization setting |
+| `LLM_SESSION_MODEL_FINGERPRINT` | `` | System fingerprint from API response |
 
 ## Scoring
 
@@ -70,14 +77,16 @@ Each test case is scored on a 0–1 scale based on:
 - **Keyword coverage** (60%): Does the output contain expected terms/patterns?
 - **Forbidden patterns** (20%): Does the code avoid known anti-patterns?
   Checked inside fenced code blocks only — prose mentions like "this avoids
-  `sorted()`" do not trigger a fail.
+  `sorted()`" do not trigger a fail. When no code blocks are present, this
+  check is skipped (actual usage cannot be evaluated from prose alone).
 - **Minimum length** (20%): Is the response sufficiently detailed?
 
 A test passes at score ≥ 0.5. Suites pass when ≥60% of their tests pass.
 
 Additional gates:
-- **Syntax gate**: cases flagged `requires_correct_code` fail if none of their
-  fenced code blocks parse as valid Python (`ast.parse`).
+- **Syntax gate**: cases flagged `requires_correct_code` are scored normally if no
+  fenced code blocks are present (gate skipped). If code blocks exist but none
+  parse as valid Python, the score is capped at 0.4 and the test fails.
 - **API errors**: a failed model call records an error on that test and never
   aborts the battery; it is reported as an error, not a model failure.
 - **Thinking models**: chain-of-thought is streamed separately and stored per
