@@ -5,7 +5,7 @@ and correct API usage patterns. Tests cover: asyncio, pathlib, typing,
 logging, and dataclasses."""
 
 import textwrap
-from .conftest import TestCase, TestResult, call_model, score_case
+from .conftest import TestCase, TestResult, run_suite
 
 
 TEST_CASES: list[TestCase] = [
@@ -23,11 +23,11 @@ TEST_CASES: list[TestCase] = [
         """),
         expected_keywords=[
             "asyncio", "Semaphore", "gather", "concurrent",
-            "max_concurrency", "type hint", "coroutine", "await",
-            "results", "errors",
+            "async def", "coroutine", "await", "results", "errors",
         ],
         forbidden_patterns=["ThreadPoolExecutor", "ProcessPoolExecutor"],
-        min_length=300,
+        min_length=200,
+        requires_correct_code=True,
     ),
     TestCase(
         name="api_pathlib_usage",
@@ -43,10 +43,11 @@ TEST_CASES: list[TestCase] = [
         """),
         expected_keywords=[
             "pathlib", "Path", "sha256", "hashlib", "is_file",
-            "iterdir", "rglob", "symlink", "duplicate", "type hint",
+            "rglob", "symlink", "duplicate",
         ],
         forbidden_patterns=["os.walk", "glob.glob"],
-        min_length=300,
+        min_length=200,
+        requires_correct_code=True,
     ),
     TestCase(
         name="api_typing_generics",
@@ -61,29 +62,22 @@ TEST_CASES: list[TestCase] = [
             Include full type hints on all methods.
         """),
         expected_keywords=[
-            "Generic", "TypeVar", "Result", "ok", "error",
-            "is_ok", "unwrap_or", "typing", "type hint",
-            "__class_getitem__", "Optional",
+            "Generic", "TypeVar", "Result", "def ok", "def error",
+            "is_ok", "unwrap_or", "typing", "Optional",
         ],
-        min_length=300,
+        min_length=200,
+        requires_correct_code=True,
     ),
 ]
 
 
 def run_tests(client, model_name: str) -> list[TestResult]:
     """Execute all API knowledge test cases."""
-    results = []
-    for case in TEST_CASES:
-        output = call_model(
-            client, model_name,
-            prompt=case.prompt,
-            system_prompt="You are an expert Python developer. Use the correct standard library APIs.",
-            temperature=0.1,
-        )
-        result = TestResult(name=case.name, passed=False, score=0.0, model_output=output)
-        score_case(result, case)
-        results.append(result)
-    return results
+    return run_suite(
+        client, model_name, TEST_CASES,
+        system_prompt="You are an expert Python developer. Use the correct standard library APIs. Be concise: give the code with minimal prose.",
+        temperature=0.1,
+    )
 
 
 def test_api_knowledge(client, model_name: str):

@@ -4,11 +4,9 @@ Evaluate the model's ability to produce correct, idiomatic Python code
 from natural-language specifications. Tests cover: basic algorithms,
 data structures, standard library usage, and type hints."""
 
-import ast
 import textwrap
-from typing import Any
 
-from .conftest import TestCase, TestResult, call_model, score_case
+from .conftest import TestCase, TestResult, run_suite
 
 
 # ---------------------------------------------------------------------------
@@ -30,12 +28,11 @@ TEST_CASES: list[TestCase] = [
             - Handle None values gracefully
         """),
         expected_keywords=[
-            "def stable_sort", "key", "lambda", "stable", "sort",
-            "merge", "insertion", "bubble", "selection", "quicksort",
-            "type hint", "docstring", "None",
+            "def stable_sort", "key", "stable", "merge", "None",
         ],
         forbidden_patterns=["sorted(", "list.sort()"],
-        min_length=200,
+        min_length=150,
+        requires_correct_code=True,
     ),
     TestCase(
         name="generate_context_manager",
@@ -51,11 +48,11 @@ TEST_CASES: list[TestCase] = [
             Include type hints and a usage example in the docstring.
         """),
         expected_keywords=[
-            "__enter__", "__exit__", "tempfile", "os.replace",
-            "AtomicFile", "context manager", "shutil", "cleanup",
-            "type hint", "docstring",
+            "AtomicFile", "__enter__", "__exit__", "os.replace",
+            "tempfile", "exception",
         ],
-        min_length=300,
+        min_length=200,
+        requires_correct_code=True,
     ),
     TestCase(
         name="generate_async_http_client",
@@ -73,9 +70,10 @@ TEST_CASES: list[TestCase] = [
         expected_keywords=[
             "aiohttp", "async def", "__aenter__", "__aexit__",
             "max_retries", "backoff", "exponential", "ConnectionError",
-            "TimeoutError", "5xx", "retry", "type hint",
+            "TimeoutError", "500", "retry",
         ],
-        min_length=400,
+        min_length=250,
+        requires_correct_code=True,
     ),
 ]
 
@@ -86,19 +84,11 @@ TEST_CASES: list[TestCase] = [
 
 def run_tests(client, model_name: str) -> list[TestResult]:
     """Execute all code-generation test cases and return results."""
-    results = []
-    for case in TEST_CASES:
-        output = call_model(
-            client, model_name,
-            prompt=case.prompt,
-            system_prompt="You are an expert Python developer. Write clean, correct, idiomatic code.",
-            temperature=0.1,
-        )
-        result = TestResult(name=case.name, passed=False, score=0.0, model_output=output)
-        score_case(result, case)
-        results.append(result)
-
-    return results
+    return run_suite(
+        client, model_name, TEST_CASES,
+        system_prompt="You are an expert Python developer. Write clean, correct, idiomatic code. Be concise: final code with a brief explanation only.",
+        temperature=0.1,
+    )
 
 
 def test_code_generation(client, model_name: str):

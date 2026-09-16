@@ -4,7 +4,7 @@ Evaluate the model's ability to produce clear, accurate, and useful documentatio
 Tests cover: docstrings, API docs, README content, and inline comments."""
 
 import textwrap
-from .conftest import TestCase, TestResult, call_model, score_case
+from .conftest import TestCase, TestResult, run_suite
 
 
 TEST_CASES: list[TestCase] = [
@@ -30,7 +30,7 @@ TEST_CASES: list[TestCase] = [
             "path", "schema", "dict", "YAML", "config",
             "ValueError", "FileNotFoundError", "type",
         ],
-        min_length=400,
+        min_length=250,
     ),
     TestCase(
         name="doc_write_readme",
@@ -49,7 +49,7 @@ TEST_CASES: list[TestCase] = [
             "pip install", "logwatch", "async", "regex",
             "Slack", "email", "CLI", "example",
         ],
-        min_length=600,
+        min_length=400,
     ),
     TestCase(
         name="doc_inline_comments",
@@ -85,25 +85,18 @@ TEST_CASES: list[TestCase] = [
             "chunk", "delimiter", "0x00", "0xFF", "clear",
             "append", "compress", "bytearray", "purpose",
         ],
-        min_length=300,
+        min_length=200,
     ),
 ]
 
 
 def run_tests(client, model_name: str) -> list[TestResult]:
     """Execute all documentation test cases."""
-    results = []
-    for case in TEST_CASES:
-        output = call_model(
-            client, model_name,
-            prompt=case.prompt,
-            system_prompt="You are an expert technical writer. Write clear, accurate documentation.",
-            temperature=0.3,  # Slightly higher temp for more natural prose
-        )
-        result = TestResult(name=case.name, passed=False, score=0.0, model_output=output)
-        score_case(result, case)
-        results.append(result)
-    return results
+    return run_suite(
+        client, model_name, TEST_CASES,
+        system_prompt="You are an expert technical writer. Write clear, accurate documentation. Be concise but complete.",
+        temperature=0.3,  # Slightly higher temp for more natural prose
+    )
 
 
 def test_documentation(client, model_name: str):

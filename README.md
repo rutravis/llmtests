@@ -44,13 +44,16 @@ This is likely a bug in how LM Studio handles Qwen3.5 MoE routing/attention patt
 pip install -e .
 
 # Run all suites against default model (nail-qwen3.6-35b-a3b-mtp)
-python run_tests.py
+python3 run_tests.py
 
 # Run a specific suite
-python run_tests.py code_generation debugging
+python3 run_tests.py code_generation debugging
 
 # Override model and endpoint
-LLM_MODEL=qwen3.8-27b LLM_BASE_URL=http://192.168.1.14:1234/v1 python run_tests.py
+LLM_MODEL=qwen3.8-27b-gsq-rco LLM_BASE_URL=http://192.168.1.14:1234/v1 python3 run_tests.py
+
+# The same battery also runs under pytest (after `pip install -e .`):
+#   LLM_MODEL=qwen3.8-27b-gsq-rco pytest
 ```
 
 ## Environment Variables
@@ -59,16 +62,43 @@ LLM_MODEL=qwen3.8-27b LLM_BASE_URL=http://192.168.1.14:1234/v1 python run_tests.
 |----------|---------|-------------|
 | `LLM_MODEL` | `nail-qwen3.6-35b-a3b-mtp` | Model name to evaluate |
 | `LLM_BASE_URL` | `http://192.168.1.14:1234/v1` | OpenAI-compatible API endpoint |
+| `LLM_MAX_TOKENS` | `16384` | Per-call completion budget (thinking models need headroom for reasoning) |
 
 ## Scoring
 
 Each test case is scored on a 0–1 scale based on:
 - **Keyword coverage** (60%): Does the output contain expected terms/patterns?
-- **Forbidden patterns** (20%): Does it avoid known anti-patterns?
+- **Forbidden patterns** (20%): Does the code avoid known anti-patterns?
+  Checked inside fenced code blocks only — prose mentions like "this avoids
+  `sorted()`" do not trigger a fail.
 - **Minimum length** (20%): Is the response sufficiently detailed?
 
 A test passes at score ≥ 0.5. Suites pass when ≥60% of their tests pass.
 
+Additional gates:
+- **Syntax gate**: cases flagged `requires_correct_code` fail if none of their
+  fenced code blocks parse as valid Python (`ast.parse`).
+- **API errors**: a failed model call records an error on that test and never
+  aborts the battery; it is reported as an error, not a model failure.
+- **Thinking models**: chain-of-thought is streamed separately and stored per
+  test as `reasoning` (recorded for review, never scored) — only the final
+  answer counts. If the token budget is exhausted mid-thinking, the test fails
+  with an explicit detail.
+
 ## Output
 
-Console output shows per-test PASS/FAIL with details. JSON reports are saved to `results/` with timestamped filenames.
+Console output shows live per-test PASS/FAIL with score and elapsed time. A JSON
+report is saved to `results/report-<timestamp>.json` after each suite
+(incremental, so partial results survive an interrupted run). Each report
+includes the full model output, per-test timing, scoring details, reasoning,
+and any API errors for every test.
+
+A single self-contained HTML report (inline CSS/JS, no external assets) is
+written alongside the JSON after each suite — model name and testing date in
+the header, an overall score ring, suite cards, and expandable per-test
+output/reasoning. Serve `results/<model>-<timestamp>.html` from any static web
+server, or regenerate one manually:
+
+```bash
+python3 make_html_report.py results/report-<timestamp>.json
+```

@@ -5,7 +5,7 @@ behavior. Tests cover: extracting methods, renaming, simplifying conditionals,
 and converting patterns."""
 
 import textwrap
-from .conftest import TestCase, TestResult, call_model, score_case
+from .conftest import TestCase, TestResult, run_suite
 
 
 TEST_CASES: list[TestCase] = [
@@ -40,7 +40,8 @@ TEST_CASES: list[TestCase] = [
             "def validate_field", "extracted", "refactor", "errors.append",
             "Name is required", "Email is required", "Invalid email format",
         ],
-        min_length=300,
+        min_length=200,
+        requires_correct_code=True,
     ),
     TestCase(
         name="refactor_simplify_conditionals",
@@ -74,9 +75,10 @@ TEST_CASES: list[TestCase] = [
         """),
         expected_keywords=[
             "early", "guard", "return", "premium", "regular",
-            "is_member", "price * 0.7", "price * 0.85", "price * 0.9",
+            "is_member", "0.7", "0.85", "0.9",
         ],
-        min_length=200,
+        min_length=150,
+        requires_correct_code=True,
     ),
     TestCase(
         name="refactor_convert_to_dataclass",
@@ -113,25 +115,19 @@ TEST_CASES: list[TestCase] = [
             "username", "email", "created_at", "is_complete",
             "mark_complete", "_profile_complete",
         ],
-        min_length=200,
+        min_length=150,
+        requires_correct_code=True,
     ),
 ]
 
 
 def run_tests(client, model_name: str) -> list[TestResult]:
     """Execute all refactoring test cases."""
-    results = []
-    for case in TEST_CASES:
-        output = call_model(
-            client, model_name,
-            prompt=case.prompt,
-            system_prompt="You are an expert Python developer specializing in code refactoring. Preserve all original behavior.",
-            temperature=0.1,
-        )
-        result = TestResult(name=case.name, passed=False, score=0.0, model_output=output)
-        score_case(result, case)
-        results.append(result)
-    return results
+    return run_suite(
+        client, model_name, TEST_CASES,
+        system_prompt="You are an expert Python developer specializing in code refactoring. Preserve all original behavior. Be concise: show the refactored code with a brief explanation only.",
+        temperature=0.1,
+    )
 
 
 def test_refactoring(client, model_name: str):

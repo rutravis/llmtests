@@ -5,7 +5,7 @@ and produce correct fixes. Tests cover: off-by-one errors, race conditions,
 type mismatches, and logic errors."""
 
 import textwrap
-from .conftest import TestCase, TestResult, call_model, score_case
+from .conftest import TestCase, TestResult, run_suite
 
 
 TEST_CASES: list[TestCase] = [
@@ -40,7 +40,8 @@ TEST_CASES: list[TestCase] = [
             "off-by-one", "infinite loop", "edge case", "boundary",
             "corrected", "fix",
         ],
-        min_length=400,
+        min_length=250,
+        requires_correct_code=True,
     ),
     TestCase(
         name="debug_race_condition",
@@ -76,7 +77,8 @@ TEST_CASES: list[TestCase] = [
             "increment", "count", "atomic", "critical section",
             "fix", "corrected",
         ],
-        min_length=400,
+        min_length=250,
+        requires_correct_code=True,
     ),
     TestCase(
         name="debug_type_error",
@@ -103,29 +105,22 @@ TEST_CASES: list[TestCase] = [
             - Provide a fixed version that handles all inputs gracefully
         """),
         expected_keywords=[
-            "None", "TypeError", "format_records", "record.get",
-            "f-string", "fix", "handle None", "graceful",
-            "corrected", "edge case",
+            "None", "AttributeError", "format_records", "record.get",
+            "f-string", "fix", "graceful", "corrected", "edge case",
         ],
-        min_length=300,
+        min_length=200,
+        requires_correct_code=True,
     ),
 ]
 
 
 def run_tests(client, model_name: str) -> list[TestResult]:
     """Execute all debugging test cases."""
-    results = []
-    for case in TEST_CASES:
-        output = call_model(
-            client, model_name,
-            prompt=case.prompt,
-            system_prompt="You are an expert Python debugger. Be thorough and precise.",
-            temperature=0.1,
-        )
-        result = TestResult(name=case.name, passed=False, score=0.0, model_output=output)
-        score_case(result, case)
-        results.append(result)
-    return results
+    return run_suite(
+        client, model_name, TEST_CASES,
+        system_prompt="You are an expert Python debugger. Identify each bug briefly and provide the corrected code. Be concise.",
+        temperature=0.1,
+    )
 
 
 def test_debugging(client, model_name: str):

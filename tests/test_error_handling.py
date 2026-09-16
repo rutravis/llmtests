@@ -4,7 +4,7 @@ Evaluate the model's ability to write code that handles errors gracefully.
 Tests cover: custom exceptions, retry logic, input validation, and cleanup."""
 
 import textwrap
-from .conftest import TestCase, TestResult, call_model, score_case
+from .conftest import TestCase, TestResult, run_suite
 
 
 TEST_CASES: list[TestCase] = [
@@ -27,10 +27,11 @@ TEST_CASES: list[TestCase] = [
         """),
         expected_keywords=[
             "PipelineError", "ValidationError", "ProcessingError", "OutputError",
-            "__init__", "cause", "raise ... from", "exception chain",
-            "__str__", "type hint",
+            "__init__", "cause", "from", "raise", "exception chain",
+            "__str__",
         ],
-        min_length=400,
+        min_length=250,
+        requires_correct_code=True,
     ),
     TestCase(
         name="err_retry_with_backoff",
@@ -49,9 +50,10 @@ TEST_CASES: list[TestCase] = [
         expected_keywords=[
             "retry", "decorator", "functools.wraps", "exponential",
             "backoff", "ConnectionError", "max_retries", "attempt",
-            "sleep", "raise", "type hint",
+            "sleep", "raise",
         ],
-        min_length=400,
+        min_length=250,
+        requires_correct_code=True,
     ),
     TestCase(
         name="err_input_validation",
@@ -77,25 +79,19 @@ TEST_CASES: list[TestCase] = [
             "tags", "list[str]", "error message", "required",
             "type check", "isinstance", "range",
         ],
-        min_length=300,
+        min_length=200,
+        requires_correct_code=True,
     ),
 ]
 
 
 def run_tests(client, model_name: str) -> list[TestResult]:
     """Execute all error handling test cases."""
-    results = []
-    for case in TEST_CASES:
-        output = call_model(
-            client, model_name,
-            prompt=case.prompt,
-            system_prompt="You are an expert Python developer. Write robust, defensive code.",
-            temperature=0.1,
-        )
-        result = TestResult(name=case.name, passed=False, score=0.0, model_output=output)
-        score_case(result, case)
-        results.append(result)
-    return results
+    return run_suite(
+        client, model_name, TEST_CASES,
+        system_prompt="You are an expert Python developer. Write robust, defensive code. Be concise: code with a brief explanation only.",
+        temperature=0.1,
+    )
 
 
 def test_error_handling(client, model_name: str):

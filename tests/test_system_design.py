@@ -4,7 +4,7 @@ Evaluate the model's ability to reason about architecture, make tradeoffs,
 and produce well-structured design documents."""
 
 import textwrap
-from .conftest import TestCase, TestResult, call_model, score_case
+from .conftest import TestCase, TestResult, run_suite
 
 
 TEST_CASES: list[TestCase] = [
@@ -29,7 +29,8 @@ TEST_CASES: list[TestCase] = [
             "async", "sync", "dead-letter", "delivery", "queue",
             "interface", "class", "example",
         ],
-        min_length=800,
+        min_length=400,
+        requires_correct_code=True,
     ),
     TestCase(
         name="design_cache_layer",
@@ -51,25 +52,19 @@ TEST_CASES: list[TestCase] = [
             "write-through", "write-back", "cache-aside",
             "in-memory", "disk", "class design", "example",
         ],
-        min_length=600,
+        min_length=400,
+        requires_correct_code=True,
     ),
 ]
 
 
 def run_tests(client, model_name: str) -> list[TestResult]:
     """Execute all system design test cases."""
-    results = []
-    for case in TEST_CASES:
-        output = call_model(
-            client, model_name,
-            prompt=case.prompt,
-            system_prompt="You are a senior software architect. Provide clear designs with code.",
-            temperature=0.3,  # Higher temp for creative design thinking
-        )
-        result = TestResult(name=case.name, passed=False, score=0.0, model_output=output)
-        score_case(result, case)
-        results.append(result)
-    return results
+    return run_suite(
+        client, model_name, TEST_CASES,
+        system_prompt="You are a senior software architect. Provide clear designs with code. Be concise: core design and key code only.",
+        temperature=0.3,  # Higher temp for creative design thinking
+    )
 
 
 def test_system_design(client, model_name: str):
